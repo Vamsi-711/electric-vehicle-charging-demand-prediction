@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grid Pulse — Interactive EV Charging Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0b1117;--panel:#121a22;--panel2:#17222c;--line:#273542;
+  --text:#eef3f6;--muted:#8b9aa8;--amber:#f2a65a;--teal:#4fd1c5;
+  --red:#e0725a;--blue:#7aa7ff;--shadow:0 12px 35px rgba(0,0,0,.18);
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 15% 0%,#17232d 0,#0b1117 38%);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh}
+button,select,input{font:inherit}
+button{cursor:pointer}
+.wrap{max-width:1450px;margin:auto;padding:22px 24px 60px}
+header{display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:16px}
+.brand{display:flex;gap:12px;align-items:center}.mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--amber),#d8792d);color:#111;font-size:22px;font-weight:800}
+h1{font-size:22px;margin:0}.sub{font-size:12px;color:var(--muted);margin-top:4px}.meta{text-align:right;color:var(--muted);font-size:12px}.meta strong{color:var(--text)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;background:var(--panel);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:16px;box-shadow:var(--shadow)}
+.control{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.control select,.control input{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:8px;outline:none}
+.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:8px 12px;border-radius:8px}.btn:hover{border-color:var(--amber)}.btn.active{background:var(--amber);color:#10161c;border-color:var(--amber);font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}.kpi{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:12px;padding:15px;min-height:96px}.kpi .label{font-size:11px;color:var(--muted)}.kpi .value{font-size:24px;font-weight:750;margin-top:10px}.kpi .small{font-size:11px;color:var(--muted);margin-top:5px}.kpi.primary .value{color:var(--amber)}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.panel{grid-column:span 6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow);min-width:0}.span12{grid-column:span 12}.span8{grid-column:span 8}.span4{grid-column:span 4}
+.panel h2{font-size:14px;margin:0}.desc{font-size:11px;color:var(--muted);margin:5px 0 12px}
+.chartbox{height:270px;position:relative}.chartbox.tall{height:330px}canvas{width:100%!important;height:100%!important}
+.tip{position:fixed;pointer-events:none;background:#070b0f;border:1px solid #3b4a57;color:#fff;padding:7px 9px;border-radius:7px;font-size:11px;z-index:100;opacity:0;transform:translate(-50%,-115%);white-space:nowrap}
+.heat{display:grid;grid-template-columns:54px repeat(24,1fr);gap:3px;overflow:auto}.heat div{min-width:18px}.heat .hlabel,.heat .dlabel{font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:center}.heat .cell{height:20px;border-radius:3px;transition:transform .12s}.heat .cell:hover{transform:scale(1.18);outline:1px solid #fff;z-index:2}
+.legend{display:flex;gap:14px;color:var(--muted);font-size:10px;margin-top:10px}.legend span{display:flex;gap:5px;align-items:center}.swatch{width:10px;height:10px;border-radius:2px}
+.tablewrap{overflow:auto;max-height:310px}.table{width:100%;border-collapse:collapse;font-size:11px}.table th{text-align:left;color:var(--muted);font-weight:500;padding:8px;border-bottom:1px solid var(--line)}.table td{padding:8px;border-bottom:1px solid var(--line)}.table tr:hover{background:var(--panel2)}.bar{height:7px;background:var(--line);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),#77e0d6)}
+.badge{font-size:9px;padding:3px 6px;border-radius:5px;background:#264944;color:var(--teal)}
+.snapshot{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.insight{background:var(--panel2);border:1px solid var(--line);padding:12px;border-radius:9px}.insight b{font-size:12px}.insight p{font-size:11px;color:var(--muted);line-height:1.45;margin:6px 0 0}
+footer{text-align:center;color:var(--muted);font-size:10px;margin-top:22px}
+.empty{display:grid;place-items:center;height:100%;color:var(--muted);font-size:12px}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.span8,.span4{grid-column:span 12}}
+@media(max-width:700px){.wrap{padding:14px}.kpis{grid-template-columns:repeat(2,1fr)}.panel{grid-column:span 12}.snapshot{grid-template-columns:1fr}header{align-items:flex-start}.meta{text-align:left}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><div class="mark">⚡</div><div><h1>Grid Pulse</h1><div class="sub">Interactive EV Charging Demand Analytics</div></div></div>
+  <div class="meta"><div><strong id="range"></strong></div><div id="stations"></div></div>
+</header>
+
+<div class="toolbar">
+  <div class="control">Period
+    <select id="period">
+      <option value="all">All data</option><option value="2023">2023</option><option value="2024">2024</option>
+      <option value="q1_2024">Q1 2024</option><option value="q2_2024">Q2 2024</option><option value="q3_2024">Q3 2024</option><option value="q4_2024">Q4 2024</option>
+    </select>
+  </div>
+  <div class="control">Location
+    <select id="location"><option value="all">All locations</option></select>
+  </div>
+  <div class="control">Station
+    <select id="station"><option value="all">All stations</option></select>
+  </div>
+  <div class="control">Trend
+    <select id="trend"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select>
+  </div>
+  <button class="btn active" id="btnSessions">Sessions</button>
+  <button class="btn" id="btnEnergy">Energy</button>
+  <button class="btn" id="reset">Reset filters</button>
+</div>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="grid">
+  <section class="panel span8"><h2 id="trendTitle">Charging volume</h2><p class="desc">Hover the chart for exact values. Use the controls above to change period, metric and aggregation.</p><div class="chartbox"><canvas id="trendChart"></canvas></div></section>
+  <section class="panel span4"><h2>Seasonal demand</h2><p class="desc">Interactive bars — click a season to highlight its value.</p><div class="chartbox"><canvas id="seasonChart"></canvas></div></section>
+
+  <section class="panel span8"><h2>Peak demand heatmap</h2><p class="desc">Hover a cell to inspect day/hour demand. Peak hour is marked by the highest cell.</p><div class="heat" id="heatmap"></div><div class="legend"><span><i class="swatch" style="background:#273542"></i>Low</span><span><i class="swatch" style="background:#8b6845"></i>Moderate</span><span><i class="swatch" style="background:#f2a65a"></i>Peak</span></div></section>
+  <section class="panel span4"><h2>Weekday vs weekend</h2><p class="desc">Hourly network profile.</p><div class="chartbox"><canvas id="weekChart"></canvas></div></section>
+
+  <section class="panel span6"><h2>Station leaderboard</h2><p class="desc">Use the station filter or click a row to inspect a station.</p><div class="tablewrap"><table class="table" id="stationTable"></table></div></section>
+  <section class="panel span6"><h2>Energy by location type</h2><p class="desc">Quartile range with median marker. Values are per-session kWh.</p><div class="chartbox"><canvas id="energyChart"></canvas></div></section>
+
+  <section class="panel span4"><h2>Capacity watch</h2><p class="desc">Highest peak-window session volumes.</p><div class="tablewrap"><table class="table" id="capacityTable"></table></div></section>
+  <section class="panel span8"><h2>Forecast vs actual</h2><p class="desc">Held-out test period. Hover for exact actual and predicted values.</p><div class="chartbox"><canvas id="forecastChart"></canvas></div></section>
+
+  <section class="panel span6"><h2>Model comparison</h2><p class="desc">Lower RMSE/MAE/MAPE indicate smaller errors; values come directly from the supplied project data.</p><table class="table" id="modelTable"></table></section>
+  <section class="panel span6"><h2>What drives the forecast</h2><p class="desc">Feature importance from the supplied best-model output.</p><div class="chartbox"><canvas id="importanceChart"></canvas></div></section>
+
+  <section class="panel span12"><h2>Executive snapshot</h2><p class="desc">Automatically updates with the selected filters.</p><div class="snapshot" id="snapshot"></div></section>
+</div>
+<footer>Synthetic dataset generated for demonstration · EV Charging Demand Prediction project</footer>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+if (typeof Chart === "undefined") {
+  document.body.innerHTML = '<div style="padding:40px;font-family:Segoe UI,Arial;color:#fff;background:#0b1117;min-height:100vh"><h2>Dashboard library could not load</h2><p>Please open this file while connected to the internet, or use the offline version generated in the next file.</p></div>';
+  throw new Error("Chart.js is unavailable");
+}
+const DATA = {"kpis":{"total_sessions":112555,"total_energy_kwh":4399313.0,"avg_duration_hours":2.99,"avg_energy_kwh":39.09,"n_stations":25,"date_range":"Jan 2023 – Dec 2024","growth_pct":16.1,"peak_hour":17,"busiest_day":"Sunday","top_station":"STN_023","top_station_count":9075},"daily_trend":{"dates":["2023-01-01","2023-01-02","2023-01-03","2023-01-04","2023-01-05","2023-01-06","2023-01-07","2023-01-08","2023-01-09","2023-01-10","2023-01-11","2023-01-12","2023-01-13","2023-01-14","2023-01-15","2023-01-16","2023-01-17","2023-01-18","2023-01-19","2023-01-20","2023-01-21","2023-01-22","2023-01-23","2023-01-24","2023-01-25","2023-01-26","2023-01-27","2023-01-28","2023-01-29","2023-01-30","2023-01-31","2023-02-01","2023-02-02","2023-02-03","2023-02-04","2023-02-05","2023-02-06","2023-02-07","2023-02-08","2023-02-09","2023-02-10","2023-02-11","2023-02-12","2023-02-13","2023-02-14","2023-02-15","2023-02-16","2023-02-17","2023-02-18","2023-02-19","2023-02-20","2023-02-21","2023-02-22","2023-02-23","2023-02-24","2023-02-25","2023-02-26","2023-02-27","2023-02-28","2023-03-01","2023-03-02","2023-03-03","2023-03-04","2023-03-05","2023-03-06","2023-03-07","2023-03-08","2023-03-09","2023-03-10","2023-03-11","2023-03-12","2023-03-13","2023-03-14","2023-03-15","2023-03-16","2023-03-17","2023-03-18","2023-03-19","2023-03-20","2023-03-21","2023-03-22","2023-03-23","2023-03-24","2023-03-25","2023-03-26","2023-03-27","2023-03-28","2023-03-29","2023-03-30","2023-03-31","2023-04-01","2023-04-02","2023-04-03","2023-04-04","2023-04-05","2023-04-06","2023-04-07","2023-04-08","2023-04-09","2023-04-10","2023-04-11","2023-04-12","2023-04-13","2023-04-14","2023-04-15","2023-04-16","2023-04-17","2023-04-18","2023-04-19","2023-04-20","2023-04-21","2023-04-22","2023-04-23","2023-04-24","2023-04-25","2023-04-26","2023-04-27","2023-04-28","2023-04-29","2023-04-30","2023-05-01","2023-05-02","2023-05-03","2023-05-04","2023-05-05","2023-05-06","2023-05-07","2023-05-08","2023-05-09","2023-05-10","2023-05-11","2023-05-12","2023-05-13","2023-05-14","2023-05-15","2023-05-16","2023-05-17","2023-05-18","2023-05-19","2023-05-20","2023-05-21","2023-05-22","2023-05-23","2023-05-24","2023-05-25","2023-05-26","2023-05-27","2023-05-28","2023-05-29","2023-05-30","2023-05-31","2023-06-01","2023-06-02","2023-06-03","2023-06-04","2023-06-05","2023-06-06","2023-06-07","2023-06-08","2023-06-09","2023-06-10","2023-06-11","2023-06-12","2023-06-13","2023-06-14","2023-06-15","2023-06-16","2023-06-17","2023-06-18","2023-06-19","2023-06-20","2023-06-21","2023-06-22","2023-06-23","2023-06-24","2023-06-25","2023-06-26","2023-06-27","2023-06-28","2023-06-29","2023-06-30","2023-07-01","2023-07-02","2023-07-03","2023-07-04","2023-07-05","2023-07-06","2023-07-07","2023-07-08","2023-07-09","2023-07-10","2023-07-11","2023-07-12","2023-07-13","2023-07-14","2023-07-15","2023-07-16","2023-07-17","2023-07-18","2023-07-19","2023-07-20","2023-07-21","2023-07-22","2023-07-23","2023-07-24","2023-07-25","2023-07-26","2023-07-27","2023-07-28","2023-07-29","2023-07-30","2023-07-31","2023-08-01","2023-08-02","2023-08-03","2023-08-04","2023-08-05","2023-08-06","2023-08-07","2023-08-08","2023-08-09","2023-08-10","2023-08-11","2023-08-12","2023-08-13","2023-08-14","2023-08-15","2023-08-16","2023-08-17","2023-08-18","2023-08-19","2023-08-20","2023-08-21","2023-08-22","2023-08-23","2023-08-24","2023-08-25","2023-08-26","2023-08-27","2023-08-28","2023-08-29","2023-08-30","2023-08-31","2023-09-01","2023-09-02","2023-09-03","2023-09-04","2023-09-05","2023-09-06","2023-09-07","2023-09-08","2023-09-09","2023-09-10","2023-09-11","2023-09-12","2023-09-13","2023-09-14","2023-09-15","2023-09-16","2023-09-17","2023-09-18","2023-09-19","2023-09-20","2023-09-21","2023-09-22","2023-09-23","2023-09-24","2023-09-25","2023-09-26","2023-09-27","2023-09-28","2023-09-29","2023-09-30","2023-10-01","2023-10-02","2023-10-03","2023-10-04","2023-10-05","2023-10-06","2023-10-07","2023-10-08","2023-10-09","2023-10-10","2023-10-11","2023-10-12","2023-10-13","2023-10-14","2023-10-15","2023-10-16","2023-10-17","2023-10-18","2023-10-19","2023-10-20","2023-10-21","2023-10-22","2023-10-23","2023-10-24","2023-10-25","2023-10-26","2023-10-27","2023-10-28","2023-10-29","2023-10-30","2023-10-31","2023-11-01","2023-11-02","2023-11-03","2023-11-04","2023-11-05","2023-11-06","2023-11-07","2023-11-08","2023-11-09","2023-11-10","2023-11-11","2023-11-12","2023-11-13","2023-11-14","2023-11-15","2023-11-16","2023-11-17","2023-11-18","2023-11-19","2023-11-20","2023-11-21","2023-11-22","2023-11-23","2023-11-24","2023-11-25","2023-11-26","2023-11-27","2023-11-28","2023-11-29","2023-11-30","2023-12-01","2023-12-02","2023-12-03","2023-12-04","2023-12-05","2023-12-06","2023-12-07","2023-12-08","2023-12-09","2023-12-10","2023-12-11","2023-12-12","2023-12-13","2023-12-14","2023-12-15","2023-12-16","2023-12-17","2023-12-18","2023-12-19","2023-12-20","2023-12-21","2023-12-22","2023-12-23","2023-12-24","2023-12-25","2023-12-26","2023-12-27","2023-12-28","2023-12-29","2023-12-30","2023-12-31","2024-01-01","2024-01-02","2024-01-03","2024-01-04","2024-01-05","2024-01-06","2024-01-07","2024-01-08","2024-01-09","2024-01-10","2024-01-11","2024-01-12","2024-01-13","2024-01-14","2024-01-15","2024-01-16","2024-01-17","2024-01-18","2024-01-19","2024-01-20","2024-01-21","2024-01-22","2024-01-23","2024-01-24","2024-01-25","2024-01-26","2024-01-27","2024-01-28","2024-01-29","2024-01-30","2024-01-31","2024-02-01","2024-02-02","2024-02-03","2024-02-04","2024-02-05","2024-02-06","2024-02-07","2024-02-08","2024-02-09","2024-02-10","2024-02-11","2024-02-12","2024-02-13","2024-02-14","2024-02-15","2024-02-16","2024-02-17","2024-02-18","2024-02-19","2024-02-20","2024-02-21","2024-02-22","2024-02-23","2024-02-24","2024-02-25","2024-02-26","2024-02-27","2024-02-28","2024-02-29","2024-03-01","2024-03-02","2024-03-03","2024-03-04","2024-03-05","2024-03-06","2024-03-07","2024-03-08","2024-03-09","2024-03-10","2024-03-11","2024-03-12","2024-03-13","2024-03-14","2024-03-15","2024-03-16","2024-03-17","2024-03-18","2024-03-19","2024-03-20","2024-03-21","2024-03-22","2024-03-23","2024-03-24","2024-03-25","2024-03-26","2024-03-27","2024-03-28","2024-03-29","2024-03-30","2024-03-31","2024-04-01","2024-04-02","2024-04-03","2024-04-04","2024-04-05","2024-04-06","2024-04-07","2024-04-08","2024-04-09","2024-04-10","2024-04-11","2024-04-12","2024-04-13","2024-04-14","2024-04-15","2024-04-16","2024-04-17","2024-04-18","2024-04-19","2024-04-20","2024-04-21","2024-04-22","2024-04-23","2024-04-24","2024-04-25","2024-04-26","2024-04-27","2024-04-28","2024-04-29","2024-04-30","2024-05-01","2024-05-02","2024-05-03","2024-05-04","2024-05-05","2024-05-06","2024-05-07","2024-05-08","2024-05-09","2024-05-10","2024-05-11","2024-05-12","2024-05-13","2024-05-14","2024-05-15","2024-05-16","2024-05-17","2024-05-18","2024-05-19","2024-05-20","2024-05-21","2024-05-22","2024-05-23","2024-05-24","2024-05-25","2024-05-26","2024-05-27","2024-05-28","2024-05-29","2024-05-30","2024-05-31","2024-06-01","2024-06-02","2024-06-03","2024-06-04","2024-06-05","2024-06-06","2024-06-07","2024-06-08","2024-06-09","2024-06-10","2024-06-11","2024-06-12","2024-06-13","2024-06-14","2024-06-15","2024-06-16","2024-06-17","2024-06-18","2024-06-19","2024-06-20","2024-06-21","2024-06-22","2024-06-23","2024-06-24","2024-06-25","2024-06-26","2024-06-27","2024-06-28","2024-06-29","2024-06-30","2024-07-01","2024-07-02","2024-07-03","2024-07-04","2024-07-05","2024-07-06","2024-07-07","2024-07-08","2024-07-09","2024-07-10","2024-07-11","2024-07-12","2024-07-13","2024-07-14","2024-07-15","2024-07-16","2024-07-17","2024-07-18","2024-07-19","2024-07-20","2024-07-21","2024-07-22","2024-07-23","2024-07-24","2024-07-25","2024-07-26","2024-07-27","2024-07-28","2024-07-29","2024-07-30","2024-07-31","2024-08-01","2024-08-02","2024-08-03","2024-08-04","2024-08-05","2024-08-06","2024-08-07","2024-08-08","2024-08-09","2024-08-10","2024-08-11","2024-08-12","2024-08-13","2024-08-14","2024-08-15","2024-08-16","2024-08-17","2024-08-18","2024-08-19","2024-08-20","2024-08-21","2024-08-22","2024-08-23","2024-08-24","2024-08-25","2024-08-26","2024-08-27","2024-08-28","2024-08-29","2024-08-30","2024-08-31","2024-09-01","2024-09-02","2024-09-03","2024-09-04","2024-09-05","2024-09-06","2024-09-07","2024-09-08","2024-09-09","2024-09-10","2024-09-11","2024-09-12","2024-09-13","2024-09-14","2024-09-15","2024-09-16","2024-09-17","2024-09-18","2024-09-19","2024-09-20","2024-09-21","2024-09-22","2024-09-23","2024-09-24","2024-09-25","2024-09-26","2024-09-27","2024-09-28","2024-09-29","2024-09-30","2024-10-01","2024-10-02","2024-10-03","2024-10-04","2024-10-05","2024-10-06","2024-10-07","2024-10-08","2024-10-09","2024-10-10","2024-10-11","2024-10-12","2024-10-13","2024-10-14","2024-10-15","2024-10-16","2024-10-17","2024-10-18","2024-10-19","2024-10-20","2024-10-21","2024-10-22","2024-10-23","2024-10-24","2024-10-25","2024-10-26","2024-10-27","2024-10-28","2024-10-29","2024-10-30","2024-10-31","2024-11-01","2024-11-02","2024-11-03","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-09","2024-11-10","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-16","2024-11-17","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-23","2024-11-24","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-11-30","2024-12-01","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-07","2024-12-08","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-14","2024-12-15","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-21","2024-12-22","2024-12-23","2024-12-24","2024-12-25","2024-12-26","2024-12-27","2024-12-28","2024-12-29","2024-12-30","2024-12-31"],"counts":[146,158,154,181,141,147,169,164,162,131,136,170,145,146,154,166,139,144,174,142,175,161,155,138,148,156,157,166,155,159,144,137,150,158,149,137,143,167,162,142,154,153,173,173,130,161,148,149,179,189,147,143,161,175,149,146,151,156,148,122,138,149,125,122,132,156,141,149,157,152,155,160,122,146,129,121,143,139,141,125,140,149,141,141,132,146,145,135,158,123,144,147,150,131,123,132,144,146,149,127,120,131,106,139,153,139,117,133,123,142,132,150,157,145,121,158,122,139,128,149,145,130,140,139,127,130,123,142,152,154,144,133,150,144,128,150,144,162,135,151,128,142,145,128,132,144,136,136,141,132,132,119,129,137,128,147,137,127,132,164,137,122,116,131,124,146,143,118,126,152,126,116,140,129,144,120,137,127,145,149,143,140,148,149,141,125,120,130,141,145,131,123,137,140,139,133,131,132,126,142,136,127,127,139,152,142,126,118,117,133,130,136,132,134,115,147,136,153,143,146,124,137,140,140,140,156,136,107,148,133,135,145,122,152,129,137,134,148,137,135,146,140,138,140,149,159,163,157,124,133,154,148,148,150,137,140,133,162,181,158,121,133,153,127,154,172,157,138,176,125,125,152,163,146,143,143,135,141,138,158,170,192,160,136,158,131,158,141,143,151,140,125,151,134,165,151,152,155,157,143,141,154,147,137,141,148,129,141,155,139,147,141,128,173,122,132,154,150,172,162,148,170,153,147,142,147,111,127,154,148,152,156,139,130,172,189,173,166,160,157,194,166,167,168,180,211,152,180,164,168,196,167,183,160,172,183,151,160,149,157,151,183,160,171,172,158,151,143,157,173,155,191,180,178,169,145,184,175,179,156,164,146,176,157,170,196,178,192,183,194,174,183,172,172,185,176,158,158,171,192,174,153,178,162,173,193,161,165,172,162,164,182,194,198,175,183,159,188,167,186,181,197,156,198,177,158,148,167,140,129,149,165,155,157,178,141,143,141,175,146,156,154,170,144,136,143,146,165,155,154,146,172,152,141,163,161,171,132,154,178,163,175,154,124,156,159,159,136,170,161,150,148,124,151,146,154,160,149,165,145,159,150,163,166,142,162,157,152,150,157,154,168,161,167,166,179,162,144,148,153,186,175,169,162,193,150,123,157,147,161,167,133,144,147,157,149,166,149,157,161,126,160,154,150,168,169,154,141,133,145,148,141,179,169,134,145,137,146,153,139,188,137,173,159,147,155,154,159,151,152,148,140,148,158,161,137,163,160,136,166,162,143,153,166,143,148,175,183,162,145,172,153,131,166,152,149,153,152,160,161,154,157,150,166,164,157,152,151,155,159,134,142,146,139,141,159,143,152,145,150,144,144,165,164,164,146,157,151,157,153,158,157,180,183,160,168,172,146,152,184,157,158,161,167,171,164,175,186,175,160,151,161,156,146,177,159,167,178,146,151,151,157,157,178,168,181,164,136,184,162,156,166,144,163,163,144,165,177,198,193,171,178,164,140,176,183,164,174,134,143,160,175,181,143,172,190,168,146,155,191,148,150,159,161,171,166,185,149,164,147,146,165,161,163,164,164,153,170,179,162,197,183,207,189,188,180,185,203,171,187,194,197,195,205,199,206,166,185,194,172,218,194,191,184,173,198,177,197,184,201,195],"rolling_avg":[146.0,152.0,152.7,159.8,156.0,154.5,156.6,157.5,158.0,155.3,153.5,154.9,154.2,153.6,154.1,154.7,153.6,151.0,153.4,153.0,153.4,153.2,152.7,153.2,154.1,153.1,153.9,155.4,155.4,154.9,155.3,154.8,153.1,154.2,152.4,150.6,149.8,151.9,152.9,151.9,151.6,150.7,152.0,153.0,152.0,153.7,153.6,152.9,155.1,158.8,159.1,157.4,157.3,159.6,159.3,158.8,157.2,156.0,157.3,154.5,153.8,153.8,149.9,145.1,144.1,145.0,143.6,141.7,142.3,142.7,143.0,143.3,141.4,143.1,142.5,140.5,141.8,143.0,143.6,141.4,141.4,141.4,140.2,139.4,137.8,136.8,138.4,137.6,139.7,139.9,139.9,140.5,141.1,141.6,140.4,139.1,139.4,139.7,140.9,139.6,137.8,137.5,133.8,134.9,135.6,135.0,132.6,132.8,132.8,133.5,132.6,132.9,133.5,134.8,134.9,136.8,137.9,137.9,136.1,136.9,138.9,138.6,139.9,139.6,139.3,137.9,135.4,135.2,137.4,137.1,138.7,138.3,139.9,139.5,138.3,139.7,140.0,141.6,142.2,143.7,144.1,144.1,143.6,141.7,140.9,141.6,140.6,140.1,141.0,139.7,138.9,135.8,135.4,134.4,134.4,134.7,134.1,134.1,134.1,135.5,135.6,134.6,132.8,132.7,132.1,134.1,135.1,133.7,133.6,133.9,133.1,132.4,132.9,130.4,130.9,130.8,132.3,132.0,133.5,133.7,133.7,135.3,136.9,136.6,137.7,138.4,136.9,137.0,136.8,138.6,138.1,137.9,137.3,136.6,136.4,135.9,134.6,133.4,132.4,133.6,134.7,134.5,133.5,133.1,134.6,135.9,135.1,133.6,132.0,132.0,131.9,132.2,132.6,132.1,130.6,132.0,132.6,133.6,133.0,133.3,133.1,134.5,136.1,136.6,137.4,138.8,139.1,137.1,139.5,138.5,138.4,137.9,136.4,136.8,137.1,137.1,136.7,137.3,137.1,135.6,136.3,138.6,137.9,138.4,139.4,140.4,143.4,143.7,143.4,143.1,144.5,144.5,145.3,146.4,145.7,145.7,145.4,146.9,149.2,149.1,146.1,144.4,146.5,146.1,146.1,147.8,148.4,147.6,150.4,149.3,148.7,148.0,146.7,145.9,147.4,148.1,146.9,147.9,146.7,145.7,146.6,150.5,149.4,150.1,152.5,151.0,150.6,150.3,150.3,150.9,151.2,150.1,151.0,149.3,148.9,146.0,145.4,146.8,146.7,147.6,146.4,147.3,147.6,146.6,146.6,148.3,146.7,147.2,146.5,145.6,145.3,144.3,142.2,144.4,143.0,141.4,141.9,142.9,145.1,146.1,147.4,149.5,149.4,149.9,149.6,150.0,148.8,145.5,147.8,148.9,148.8,149.2,146.9,144.6,146.3,147.6,149.1,150.4,151.7,152.4,158.4,161.1,162.1,163.5,165.5,169.4,170.4,173.9,173.4,171.9,173.5,173.6,175.2,175.4,173.9,175.1,173.9,173.4,171.1,167.3,167.2,167.4,167.1,167.4,165.6,165.0,162.7,161.5,160.4,159.7,160.0,162.2,164.4,165.9,167.2,164.5,166.2,166.5,167.0,166.9,167.8,168.0,169.4,168.2,169.3,169.6,169.5,170.5,171.5,175.0,174.3,174.9,174.4,175.5,177.0,179.1,177.9,177.9,178.0,177.7,177.4,174.6,174.3,172.0,171.9,172.6,171.9,171.4,170.4,169.4,169.9,171.6,173.2,173.6,173.7,175.9,174.5,176.4,175.9,175.4,176.9,179.1,178.0,180.6,181.5,179.8,176.5,174.3,171.8,167.9,167.2,165.6,164.7,162.6,162.4,158.4,157.5,153.4,153.3,152.4,153.0,152.1,154.2,155.3,154.4,152.8,152.1,152.7,151.1,152.0,152.2,154.4,152.8,152.4,152.9,153.4,153.5,152.6,153.9,156.4,157.6,158.4,158.3,156.1,156.9,155.9,156.4,156.1,156.6,156.6,155.1,156.2,154.1,152.1,150.9,149.4,149.9,151.6,152.3,151.3,151.3,152.3,151.8,152.1,151.6,152.6,154.9,155.0,155.3,155.5,155.1,156.4,156.1,157.7,158.2,160.3,160.2,158.6,159.1,158.4,160.5,162.1,163.5,163.9,166.6,165.4,162.6,161.9,160.6,159.3,159.6,158.9,158.6,158.1,156.1,154.2,154.0,153.1,150.5,151.3,151.5,151.7,152.2,151.4,151.5,154.1,154.8,154.4,152.6,152.4,151.1,150.5,152.1,152.6,153.2,152.1,150.9,150.6,149.6,147.4,149.9,149.6,152.4,153.4,153.4,154.4,152.6,151.9,153.1,153.6,154.4,153.9,153.6,154.9,153.0,153.0,152.3,152.4,151.6,152.4,152.9,151.8,151.9,152.9,152.6,153.1,155.1,156.9,156.9,157.5,158.1,157.6,157.3,157.3,156.6,157.0,157.0,156.0,157.2,158.1,156.6,154.8,153.9,155.4,154.9,155.1,156.6,155.6,155.8,156.5,155.1,154.4,153.4,151.9,150.9,151.1,150.6,149.6,148.2,147.7,147.1,146.6,147.4,147.7,149.9,150.1,150.9,151.8,152.9,152.5,153.6,153.9,156.4,158.8,159.9,161.6,162.1,160.9,160.0,162.7,162.7,163.2,163.5,164.5,165.4,165.9,165.6,165.8,166.9,166.3,164.8,165.9,166.1,163.4,164.9,164.9,165.4,166.1,164.4,163.4,161.7,159.6,158.4,159.6,160.9,162.3,162.9,162.1,162.6,162.9,162.1,161.2,161.1,161.9,162.8,161.9,162.4,162.4,164.5,165.4,165.9,168.9,167.4,165.9,167.3,168.5,169.9,170.7,168.6,168.6,168.2,168.1,166.9,163.3,163.4,164.2,164.5,164.9,163.4,164.0,162.9,161.1,162.9,164.2,165.0,164.4,164.6,165.1,164.5,161.4,159.9,161.2,161.6,159.6,160.8,161.8,161.4,162.0,162.6,162.3,163.1,165.6,168.6,171.6,174.6,175.7,177.4,180.3,180.8,182.4,185.4,187.3,188.4,191.5,191.6,193.3,190.4,190.1,190.5,189.9,192.3,191.6,193.1,192.9,191.4,191.4,190.1,189.6,188.5,188.1,190.2]},"heatmap":{"days":["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],"hours":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23],"matrix":[[410,415,331,258,267,373,601,944,943,837,753,748,795,755,780,910,932,974,955,830,789,638,562,433],[422,386,308,292,268,363,616,912,924,822,748,684,771,759,746,905,898,994,889,822,719,635,519,448],[379,372,339,290,267,361,630,892,900,831,752,686,719,698,719,916,924,960,862,820,711,674,520,437],[407,416,352,278,286,366,585,879,917,809,708,667,790,735,774,880,972,982,933,811,749,640,562,420],[401,352,297,280,264,357,599,909,945,793,775,714,749,723,791,880,934,949,924,810,762,648,510,389],[520,414,333,281,292,401,589,873,960,771,717,693,765,688,739,881,899,1016,994,912,817,702,637,505],[514,458,387,295,300,429,613,882,876,758,668,682,793,684,782,869,950,988,1007,963,909,768,635,531]]},"weekday_vs_weekend":{"hours":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23],"weekday":[2019,1941,1627,1398,1352,1820,3031,4536,4629,4092,3736,3499,3824,3670,3810,4491,4660,4859,4563,4093,3730,3235,2673,2127],"weekend":[1034,872,720,576,592,830,1202,1755,1836,1529,1385,1375,1558,1372,1521,1750,1849,2004,2001,1875,1726,1470,1272,1036]},"seasonal_demand":{"seasons":["Winter","Spring","Summer","Fall"],"counts":[30699,27030,26519,28307]},"station_leaderboard":[{"station_id":"STN_023","location_type":"Downtown","count":9075},{"station_id":"STN_012","location_type":"Highway_Rest_Stop","count":7525},{"station_id":"STN_001","location_type":"Downtown","count":7468},{"station_id":"STN_024","location_type":"Highway_Rest_Stop","count":7054},{"station_id":"STN_014","location_type":"Residential","count":6447},{"station_id":"STN_015","location_type":"Residential","count":5874},{"station_id":"STN_009","location_type":"Mall","count":5672},{"station_id":"STN_008","location_type":"Residential","count":5396},{"station_id":"STN_020","location_type":"Office_Park","count":5243},{"station_id":"STN_016","location_type":"Residential","count":5074},{"station_id":"STN_018","location_type":"Downtown","count":4615},{"station_id":"STN_019","location_type":"Highway_Rest_Stop","count":4274},{"station_id":"STN_017","location_type":"Office_Park","count":4155},{"station_id":"STN_006","location_type":"Highway_Rest_Stop","count":3704},{"station_id":"STN_025","location_type":"Residential","count":3589}],"energy_by_location":[{"location":"Residential","min":0.8,"q1":17.1,"median":38.5,"q3":89.6,"max":307.2,"mean":53.6},{"location":"Downtown","min":0.5,"q1":9.0,"median":17.9,"q3":41.1,"max":137.2,"mean":33.1},{"location":"Highway_Rest_Stop","min":0.7,"q1":9.0,"median":17.6,"q3":40.2,"max":134.0,"mean":32.6},{"location":"Mall","min":0.8,"q1":9.0,"median":17.6,"q3":40.7,"max":135.9,"mean":32.7},{"location":"Office_Park","min":0.8,"q1":9.1,"median":17.6,"q3":41.5,"max":138.8,"mean":33.2}],"monthly_energy_trend":{"months":["2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12"],"energy_kwh":[194545.0,170722.0,169937.0,157652.0,164270.0,159807.0,161482.0,162755.0,172963.0,179773.0,168477.0,207683.0,209900.0,196104.0,189369.0,179604.0,188786.0,180738.0,182753.0,183492.0,193781.0,192877.0,198307.0,233536.0]},"model_comparison":[{"model":"XGBoost","RMSE":0.554,"MAE":0.392,"MAPE_%":66.634},{"model":"Random Forest","RMSE":0.559,"MAE":0.397,"MAPE_%":65.645},{"model":"Linear Regression","RMSE":0.57,"MAE":0.416,"MAPE_%":70.226},{"model":"Naive (same hour last week)","RMSE":0.773,"MAE":0.424,"MAPE_%":78.007}],"actual_vs_predicted":{"dates":["2024-11-02","2024-11-03","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-09","2024-11-10","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-16","2024-11-17","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-23","2024-11-24","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-11-30","2024-12-01","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-07","2024-12-08","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-14","2024-12-15","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-21","2024-12-22","2024-12-23","2024-12-24","2024-12-25","2024-12-26","2024-12-27","2024-12-28","2024-12-29","2024-12-30","2024-12-31"],"actual":[175.0,181.0,143.0,172.0,190.0,168.0,146.0,155.0,191.0,148.0,150.0,159.0,161.0,171.0,166.0,185.0,149.0,164.0,147.0,146.0,165.0,161.0,163.0,164.0,164.0,153.0,170.0,179.0,162.0,197.0,183.0,207.0,189.0,188.0,180.0,185.0,203.0,171.0,187.0,194.0,197.0,195.0,205.0,199.0,206.0,166.0,185.0,194.0,172.0,218.0,194.0,191.0,184.0,173.0,198.0,177.0,197.0,184.0,201.0,195.0],"predicted":[160.9,157.1,156.0,149.2,157.0,164.1,151.5,148.8,158.0,156.3,150.7,144.1,153.9,150.2,160.4,162.0,157.3,155.2,150.3,144.5,150.1,161.2,153.4,156.9,151.4,151.2,153.1,158.9,159.5,178.7,176.8,179.0,174.7,179.9,173.7,175.9,186.1,177.8,178.0,175.2,185.7,178.8,177.9,187.5,182.9,177.8,163.3,184.8,178.1,182.0,193.2,183.7,175.8,165.2,182.1,178.6,187.0,177.8,182.0,175.8]},"feature_importance":[{"feature":"loc_Residential","importance":0.2474},{"feature":"hour","importance":0.1051},{"feature":"rolling_avg_24h","importance":0.0849},{"feature":"loc_Office_Park","importance":0.0753},{"feature":"hour_cos","importance":0.0745},{"feature":"loc_Downtown","importance":0.0718},{"feature":"hour_sin","importance":0.0585},{"feature":"loc_Highway_Rest_Stop","importance":0.0544}],"capacity_flags":[{"station_id":"STN_023","location_type":"Downtown","peak_sessions":1819},{"station_id":"STN_001","location_type":"Downtown","peak_sessions":1458},{"station_id":"STN_014","location_type":"Residential","peak_sessions":1397},{"station_id":"STN_015","location_type":"Residential","peak_sessions":1272},{"station_id":"STN_008","location_type":"Residential","peak_sessions":1203}]};
+
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString(undefined,{maximumFractionDigits:1});
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+$("range").textContent=DATA.kpis.date_range;
+$("stations").textContent=`${DATA.kpis.n_stations} stations monitored`;
+
+const locations=[...new Set(DATA.station_leaderboard.map(x=>x.location_type))];
+locations.forEach(x=>$("location").insertAdjacentHTML("beforeend",`<option value="${x}">${x.replaceAll("_"," ")}</option>`));
+DATA.station_leaderboard.forEach(x=>$("station").insertAdjacentHTML("beforeend",`<option value="${x.station_id}">${x.station_id}</option>`));
+
+let metric="sessions";
+const charts={};
+
+function destroy(name){if(charts[name]){charts[name].destroy();delete charts[name]}}
+
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+
+function rangeFilter(date){
+  const p=$("period").value, d=new Date(date);
+  if(p==="all") return true;
+  if(p==="2023") return d.getFullYear()===2023;
+  if(p==="2024") return d.getFullYear()===2024;
+  if(p.startsWith("q")) {
+    const q=+p[1], y=+p.slice(3);
+    return d.getFullYear()===y && Math.floor(d.getMonth()/3)+1===q;
+  }
+  return true;
+}
+
+function selectedStationMultiplier(){
+  const st=$("station").value, loc=$("location").value;
+  let base=1;
+  if(st!=="all") base=(DATA.station_leaderboard.find(x=>x.station_id===st)?.count||0)/Math.max(...DATA.station_leaderboard.map(x=>x.count));
+  else if(loc!=="all"){
+    const a=DATA.station_leaderboard.filter(x=>x.location_type===loc);
+    base=a.reduce((s,x)=>s+x.count,0)/DATA.kpis.total_sessions;
+  } else return 1;
+  return Math.max(.08,Math.min(1,base));
+}
+
+function filteredDaily(){
+  const dates=DATA.daily_trend.dates, counts=DATA.daily_trend.counts;
+  const mult=selectedStationMultiplier();
+  const rows=[];
+  for(let i=0;i<dates.length;i++) if(rangeFilter(dates[i])) rows.push({date:dates[i],value:counts[i]*mult});
+  return rows;
+}
+
+function aggregate(rows, mode){
+  if(mode==="daily") return rows;
+  const map=new Map();
+  rows.forEach(r=>{
+    let key;
+    const d=new Date(r.date);
+    if(mode==="weekly"){
+      const day=new Date(d); const diff=(day.getDay()+6)%7; day.setDate(day.getDate()-diff);
+      key=day.toISOString().slice(0,10);
+    }else key=r.date.slice(0,7);
+    map.set(key,(map.get(key)||0)+r.value);
+  });
+  return [...map].map(([date,value])=>({date,value}));
+}
+
+function makeChart(canvas, type, labels, datasets, options={}){
+  destroy(canvas.id);
+  charts[canvas.id]=new Chart(canvas,{type,data:{labels,datasets},options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:"index",intersect:false},
+    plugins:{legend:{labels:{boxWidth:10,color:css("--muted"),font:{size:10}}}},
+    scales:{x:{ticks:{color:css("--muted"),maxTicksLimit:8},grid:{display:false}},y:{ticks:{color:css("--muted")},grid:{color:"#23303a"}}},
+    ...options
+  }});
+}
+
+function drawTrend(){
+  const rows=aggregate(filteredDaily(),$("trend").value);
+  const labels=rows.map(x=>x.date), vals=rows.map(x=>metric==="sessions"?x.value:x.value*DATA.kpis.avg_energy_kwh);
+  $("trendTitle").textContent=`${metric==="sessions"?"Charging sessions":"Estimated energy delivered"} — ${$("trend").value}`;
+  makeChart($("trendChart"),"line",labels,[{label:metric==="sessions"?"Sessions":"Energy (kWh)",data:vals,borderColor:css("--amber"),backgroundColor:"rgba(242,166,90,.12)",fill:true,tension:.28,pointRadius:0,borderWidth:2}]);
+}
+
+function drawSeason(){
+  const seasons=DATA.seasonal_demand.seasons;
+  const vals=DATA.seasonal_demand.counts.map(v=>metric==="sessions"?v:v*DATA.kpis.avg_energy_kwh);
+  makeChart($("seasonChart"),"bar",seasons,[{label:metric==="sessions"?"Sessions":"Energy",data:vals,backgroundColor:css("--teal"),borderRadius:6}],{
+    plugins:{legend:{display:false}},
+    onClick:(e,els)=>{if(els.length){const i=els[0].index;alert(`${seasons[i]}: ${fmt(vals[i])} ${metric==="sessions"?"sessions":"kWh"}`)}}
+  });
+}
+
+function drawHeat(){
+  const hm=DATA.heatmap, flat=hm.matrix.flat(), max=Math.max(...flat);
+  let s=`<div></div>${hm.hours.map(h=>`<div class="hlabel">${h}</div>`).join("")}`;
+  hm.days.forEach((day,i)=>{
+    s+=`<div class="dlabel">${day.slice(0,3)}</div>`;
+    hm.hours.forEach((h,j)=>{
+      const v=hm.matrix[i][j], t=v/max;
+      const c1=[39,53,66],c2=[242,166,90],c=[...c1.map((x,k)=>Math.round(x+(c2[k]-x)*t))];
+      s+=`<div class="cell" style="background:rgb(${c.join(",")})" data-day="${day}" data-hour="${h}" data-value="${v}"></div>`;
+    });
+  });
+  $("heatmap").innerHTML=s;
+  $("heatmap").querySelectorAll(".cell").forEach(cell=>{
+    cell.addEventListener("mousemove",e=>showTip(e,`${cell.dataset.day} · ${cell.dataset.hour}:00 · ${fmt(cell.dataset.value)} sessions`));
+    cell.addEventListener("mouseleave",hideTip);
+  });
+}
+function showTip(e,t){$("tip").textContent=t;$("tip").style.left=e.clientX+"px";$("tip").style.top=e.clientY+"px";$("tip").style.opacity=1}
+function hideTip(){$("tip").style.opacity=0}
+
+function drawWeek(){
+  const w=DATA.weekday_vs_weekend;
+  makeChart($("weekChart"),"line",w.hours.map(h=>h+":00"),[
+    {label:"Weekday",data:w.weekday,borderColor:css("--amber"),pointRadius:0,borderWidth:2,tension:.3},
+    {label:"Weekend",data:w.weekend,borderColor:css("--teal"),pointRadius:0,borderWidth:2,tension:.3}
+  ]);
+}
+
+function drawStations(){
+  const loc=$("location").value, st=$("station").value;
+  let rows=DATA.station_leaderboard.filter(x=>(loc==="all"||x.location_type===loc)&&(st==="all"||x.station_id===st));
+  const max=Math.max(...DATA.station_leaderboard.map(x=>x.count));
+  $("stationTable").innerHTML=`<thead><tr><th>#</th><th>Station</th><th>Location</th><th>Sessions</th><th>Volume</th></tr></thead><tbody>${
+    rows.map((x,i)=>`<tr data-st="${x.station_id}" style="cursor:pointer"><td>${i+1}</td><td><b>${x.station_id}</b></td><td>${x.location_type.replaceAll("_"," ")}</td><td>${fmt(x.count)}</td><td><div class="bar"><i style="width:${x.count/max*100}%"></i></div></td></tr>`).join("")
+  }</tbody>`;
+  $("stationTable").querySelectorAll("tr[data-st]").forEach(r=>r.onclick=()=>{$("station").value=r.dataset.st;update()});
+}
+
+function drawEnergy(){
+  const rows=DATA.energy_by_location.filter(x=>$("location").value==="all"||x.location===$("location").value);
+  makeChart($("energyChart"),"bar",rows.map(x=>x.location.replaceAll("_"," ")),[
+    {label:"Median kWh",data:rows.map(x=>x.median),backgroundColor:css("--amber"),borderRadius:5},
+    {label:"Mean kWh",data:rows.map(x=>x.mean),backgroundColor:css("--teal"),borderRadius:5}
+  ],{scales:{x:{ticks:{color:css("--muted")},grid:{display:false}},y:{ticks:{color:css("--muted")},grid:{color:"#23303a"}}}});
+}
+
+function drawCapacity(){
+  $("capacityTable").innerHTML=`<thead><tr><th>Station</th><th>Location</th><th>Peak sessions</th></tr></thead><tbody>${
+    DATA.capacity_flags.map(x=>`<tr><td><b>${x.station_id}</b></td><td>${x.location_type.replaceAll("_"," ")}</td><td style="color:${css("--red")}">${fmt(x.peak_sessions)}</td></tr>`).join("")
+  }</tbody>`;
+}
+
+function drawForecast(){
+  const d=DATA.actual_vs_predicted;
+  makeChart($("forecastChart"),"line",d.dates,[
+    {label:"Actual",data:d.actual,borderColor:"#d6dde3",borderWidth:1.7,pointRadius:0,tension:.25},
+    {label:"Predicted",data:d.predicted,borderColor:css("--teal"),borderWidth:2,pointRadius:0,tension:.25,borderDash:[5,3]}
+  ]);
+}
+
+function drawModels(){
+  const best=DATA.model_comparison[0].model;
+  $("modelTable").innerHTML=`<thead><tr><th>Model</th><th>RMSE</th><th>MAE</th><th>MAPE</th></tr></thead><tbody>${
+    DATA.model_comparison.map(x=>`<tr><td><b>${x.model}</b> ${x.model===best?'<span class="badge">BEST</span>':''}</td><td>${x.RMSE}</td><td>${x.MAE}</td><td>${x['MAPE_%']}%</td></tr>`).join("")
+  }</tbody>`;
+}
+
+function drawImportance(){
+  const f=DATA.feature_importance;
+  makeChart($("importanceChart"),"bar",f.map(x=>x.feature.replace("loc_","").replaceAll("_"," ")),[
+    {label:"Importance",data:f.map(x=>x.importance),backgroundColor:css("--amber"),borderRadius:4}
+  ],{indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{ticks:{color:css("--muted")},grid:{color:"#23303a"}},y:{ticks:{color:css("--muted")},grid:{display:false}}}});
+}
+
+function drawKpis(){
+  const mult=selectedStationMultiplier(), rows=filteredDaily(), total=rows.reduce((s,x)=>s+x.value,0);
+  const energy=total*DATA.kpis.avg_energy_kwh;
+  const station=$("station").value==="all"?DATA.kpis.top_station:$("station").value;
+  const cards=[
+    ["Total sessions",fmt(total),$("period").value==="all"?`Dataset total: ${fmt(DATA.kpis.total_sessions)}`:"Selected period"],
+    ["Energy delivered",fmt(energy/1000)+" MWh","Estimated from average session energy"],
+    ["Avg. session",DATA.kpis.avg_duration_hours+" hrs","Average charging duration"],
+    ["Peak hour",DATA.kpis.peak_hour+":00",DATA.kpis.busiest_day+" busiest day"],
+    ["Selected station",station,$("location").value==="all"?"All locations":$("location").value.replaceAll("_"," ")],
+    ["Growth",DATA.kpis.growth_pct+"%","Project growth indicator"]
+  ];
+  $("kpis").innerHTML=cards.map((x,i)=>`<div class="kpi ${i===0?'primary':''}"><div class="label">${x[0]}</div><div class="value">${x[1]}</div><div class="small">${x[2]}</div></div>`).join("");
+}
+
+function drawSnapshot(){
+  const mult=selectedStationMultiplier(), rows=filteredDaily(), total=rows.reduce((s,x)=>s+x.value,0);
+  const top=DATA.station_leaderboard.find(x=>x.station_id===DATA.kpis.top_station);
+  const peak=DATA.capacity_flags[0];
+  $("snapshot").innerHTML=[
+    ["Demand pattern",`The network's recorded peak hour is <b>${DATA.kpis.peak_hour}:00</b>, with ${DATA.kpis.busiest_day} identified as the busiest day.`],
+    ["Station focus",`<b>${top.station_id}</b> is the highest-volume station in the supplied leaderboard with ${fmt(top.count)} sessions.`],
+    ["Forecasting",`The supplied model comparison contains <b>${DATA.model_comparison.length}</b> models; the first listed model is ${esc(DATA.model_comparison[0].model)}.`],
+    ["Capacity watch",`<b>${peak.station_id}</b> has ${fmt(peak.peak_sessions)} peak-window sessions in the supplied capacity flags.`],
+    ["Current filter",`The dashboard is showing <b>${fmt(total)}</b> scaled session volume for the selected period/station/location view.`],
+    ["Use case",`Interactive filters help explore demand patterns before discussing capacity planning or forecasting results.`]
+  ].map(x=>`<div class="insight"><b>${x[0]}</b><p>${x[1]}</p></div>`).join("");
+}
+
+function update(){drawKpis();drawTrend();drawSeason();drawHeat();drawWeek();drawStations();drawEnergy();drawCapacity();drawForecast();drawModels();drawImportance();drawSnapshot()}
+$("period").onchange=update;$("location").onchange=update;$("station").onchange=update;$("trend").onchange=drawTrend;
+$("btnSessions").onclick=()=>{metric="sessions";$("btnSessions").classList.add("active");$("btnEnergy").classList.remove("active");drawTrend();drawSeason()};
+$("btnEnergy").onclick=()=>{metric="energy";$("btnEnergy").classList.add("active");$("btnSessions").classList.remove("active");drawTrend();drawSeason()};
+$("reset").onclick=()=>{$("period").value="all";$("location").value="all";$("station").value="all";$("trend").value="daily";metric="sessions";$("btnSessions").classList.add("active");$("btnEnergy").classList.remove("active");update()};
+
+update();
+</script>
+</body>
+</html>
